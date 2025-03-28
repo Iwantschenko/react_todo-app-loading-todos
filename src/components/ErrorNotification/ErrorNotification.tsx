@@ -1,20 +1,45 @@
-export const ErrorNotification = () => {
+import classNames from 'classnames';
+import { ErrorMessages } from '../../types/errorMessage';
+import { useEffect } from 'react';
+
+interface Props {
+  errorMessage: ErrorMessages | null;
+  removeError: () => void;
+}
+
+export const ErrorNotification: React.FC<Props> = ({
+  errorMessage,
+  removeError,
+}) => {
+  const handleCloseErrorMessage = removeError;
+
+  useEffect(() => {
+    if (!errorMessage) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      removeError();
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [errorMessage]);
+
   return (
     <div
       data-cy="ErrorNotification"
-      className="notification is-danger is-light has-text-weight-normal"
+      className={classNames(
+        'notification is-danger is-light has-text-weight-normal',
+        { hidden: errorMessage === null },
+      )}
     >
-      <button data-cy="HideErrorButton" type="button" className="delete" />
-      {/* show only one message at a time */}
-      Unable to load todos
-      <br />
-      Title should not be empty
-      <br />
-      Unable to add a todo
-      <br />
-      Unable to delete a todo
-      <br />
-      Unable to update a todo
+      <button
+        onClick={handleCloseErrorMessage}
+        data-cy="HideErrorButton"
+        type="button"
+        className="delete"
+      />
+      {errorMessage}
     </div>
   );
 };

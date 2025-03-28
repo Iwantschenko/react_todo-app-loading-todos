@@ -1,9 +1,15 @@
 /* eslint-disable jsx-a11y/label-has-associated-control */
 /* eslint-disable jsx-a11y/control-has-associated-label */
 
-export const Main = () => {
+import { Todo } from '../../../types/Todo';
+
+interface Props {
+  todo: Todo;
+}
+
+export const TodoItem: React.FC<Props> = ({}) => {
   return (
-    <section className="todoapp__main" data-cy="TodoList">
+    <>
       {/* This is a completed todo */}
       <div data-cy="Todo" className="todo completed">
         <label className="todo__status-label">
@@ -105,6 +111,6 @@ export const Main = () => {
           <div className="loader" />
         </div>
       </div>
-    </section>
+    </>
   );
 };
