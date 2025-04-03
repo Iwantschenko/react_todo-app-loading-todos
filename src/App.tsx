@@ -1,49 +1,149 @@
 /* eslint-disable jsx-a11y/label-has-associated-control */
 /* eslint-disable jsx-a11y/control-has-associated-label */
 
-import { UserWarning } from './UserWarning';
-import { todosService, USER_ID } from './api/todos';
-
 import { useEffect, useRef, useState } from 'react';
 
 import './styles/todoapp.scss';
 
 import { Todo } from './types/Todo';
-import { ErrorMessages } from './types/errorMessage';
 
-import { Header } from './components/Header';
 import { ErrorNotification } from './components/ErrorNotification';
-import { TodoList } from './components/Main/TodoList';
+import { TodoList } from './components/TodoList';
 import { TodoFilter } from './components/TodoFilter';
 import { FilterType } from './types/FilterType';
+import { todosService, USER_ID } from './api/todos';
 
-function getFilteredTodosFromApi(todos: Todo[], filter: FilterType) {
-  const todoList = [...todos];
-
-  switch (filter) {
-    case FilterType.All:
-      return todoList;
-    case FilterType.Active:
-      return todoList.filter(todo => todo.completed === false);
-    case FilterType.Completed:
-      return todoList.filter(todo => todo.completed === true);
-    default:
-      throw new Error();
-  }
-}
+import { TodoItem } from './components/TodoItem';
+import { ErrorMessages } from './types/ErrorMessages';
+import classNames from 'classnames';
+import { TodoInput } from './components/TodoInput/TodoInput';
 
 export const App = () => {
-  const todoFromServer = useRef<Todo[]>([]);
   const [todoList, setTodoList] = useState<Todo[]>([]);
-  const [errorMessage, setErrorMessage] = useState<ErrorMessages | null>(null);
+
+  const currentInputElementRef = useRef<HTMLInputElement | null>(null);
   const [currentFilter, setCurrentFilter] = useState(FilterType.All);
+
+  const [tempTodo, setTempTodo] = useState<Todo | null>(null);
+  const [todosToLoading, setTodosToLoading] = useState<Todo[]>([]);
+
+  const [errorMessage, setErrorMessage] = useState<ErrorMessages | null>(null);
+
+  const getFilteredTodos = () => {
+    switch (currentFilter) {
+      case FilterType.Active:
+        return todoList.filter(todo => todo.completed === false);
+      case FilterType.Completed:
+        return todoList.filter(todo => todo.completed === true);
+      default:
+        return todoList;
+    }
+  };
+
+  const getActiveTodoCount = () => {
+    return todoList.filter(todo => todo.completed === false).length;
+  };
+
+  const hasComplitedTodos = () => {
+    if (todoList.length === 0) {
+      return true;
+    }
+
+    return todoList.some(todo => todo.completed === true);
+  };
+
+  const isToggleAll = () => {
+    return todoList.every(todo => todo.completed);
+  };
+
+  const handleSetInputElement = (newInputElement: HTMLInputElement | null) => {
+    currentInputElementRef.current = newInputElement;
+  };
+
+  const callFocus = () => {
+    const element = currentInputElementRef.current;
+
+    if (element) {
+      setTimeout(() => {
+        element.focus();
+      }, 0);
+    }
+  };
+
+  const onAddTodo = async (title: string) => {
+    const newTodo: Todo = {
+      id: 0,
+      title: title,
+      completed: false,
+      userId: USER_ID,
+    };
+
+    setTempTodo({ ...newTodo });
+
+    try {
+      const requestResult = await todosService.add(newTodo);
+
+      setTempTodo(null);
+      setTodoList(current => [...current, requestResult]);
+
+      return requestResult;
+    } catch {
+      setErrorMessage(ErrorMessages.addError);
+      setTempTodo(null);
+
+      return null;
+    } finally {
+      callFocus();
+    }
+  };
+
+  const onRemoveTodo = async (todoToRemove: Todo) => {
+    setTodosToLoading(prev => [...prev, todoToRemove]);
+
+    try {
+      await todosService.remove(todoToRemove);
+      setTodoList(prev => prev.filter(todo => todo.id !== todoToRemove.id));
+    } catch {
+      setErrorMessage(ErrorMessages.deleteError);
+    } finally {
+      callFocus();
+    }
+  };
+
+  const removeAllComplited = async () => {
+    const todosToRemove = todoList.filter(todo => todo.completed);
+
+    setTodosToLoading(todosToRemove);
+
+    const results = await Promise.allSettled(
+      todosToRemove.map(todoToRemove => {
+        return todosService.remove(todoToRemove);
+      }),
+    );
+
+    const failedTodos = results
+      .map((result, i) =>
+        result.status === 'rejected' ? todosToRemove[i] : null,
+      )
+      .filter(Boolean);
+
+    if (failedTodos.length) {
+      setErrorMessage(ErrorMessages.deleteError);
+    }
+
+    setTodoList(prev =>
+      prev.filter(
+        todo => !todosToRemove.includes(todo) || failedTodos.includes(todo),
+      ),
+    );
+    callFocus();
+  };
 
   useEffect(() => {
     const fetchTodos = async () => {
       try {
         const todos = await todosService.getAll();
 
-        todoFromServer.current = todos;
         setTodoList(todos);
       } catch {
         setErrorMessage(ErrorMessages.getError);
@@ -51,65 +151,56 @@ export const App = () => {
     };
 
     fetchTodos();
-  }, [todoFromServer]);
-
-  useEffect(() => {
-    if (todoFromServer.current?.length === 0) {
-      return;
-    }
-
-    try {
-      const filteredTodos = getFilteredTodosFromApi(
-        todoFromServer.current,
-        currentFilter,
-      );
-
-      setTodoList(filteredTodos);
-    } catch {
-      setErrorMessage(ErrorMessages.unknownError);
-    }
-  }, [currentFilter]);
-
-  if (!USER_ID) {
-    return <UserWarning />;
-  }
-
-  const getActiveTaskCount = () => {
-    return todoFromServer.current.filter(todo => todo.completed === false)
-      .length;
-  };
-
-  const checkForDoneTask = () => {
-    if (todoFromServer.current.length === 0) {
-      return true;
-    }
-
-    return todoFromServer.current.some(todo => todo.completed === true);
-  };
+    callFocus();
+  }, []);
 
   return (
     <div className="todoapp">
       <h1 className="todoapp__title">todos</h1>
 
       <div className="todoapp__content">
-        <Header />
+        <header className="todoapp__header">
+          <button
+            type="button"
+            className={classNames('todoapp__toggle-all', {
+              active: isToggleAll(),
+            })}
+            data-cy="ToggleAllButton"
+          />
+          <TodoInput
+            onAddTodo={onAddTodo}
+            setErrorMessage={(message: ErrorMessages) =>
+              setErrorMessage(message)
+            }
+            setCurrentInputElement={handleSetInputElement}
+          />
+        </header>
+        <section className="todoapp__main" data-cy="TodoList">
+          <TodoList
+            todoList={getFilteredTodos()}
+            onRemoveItem={onRemoveTodo}
+            todosToLoading={todosToLoading}
+          />
+          {tempTodo && (
+            <TodoItem key={tempTodo.id} todo={tempTodo} isLoading={true} />
+          )}
+        </section>
 
-        {todoList && <TodoList todoList={todoList} />}
-        {todoFromServer.current?.length !== 0 && (
+        {todoList.length !== 0 && (
           <>
             <footer className="todoapp__footer" data-cy="Footer">
               <span className="todo-count" data-cy="TodosCounter">
-                {getActiveTaskCount() + ' items left'}
+                {getActiveTodoCount() + ' items left'}
               </span>
               <TodoFilter
                 selectedFilter={currentFilter}
                 onFilterChange={newFilter => setCurrentFilter(newFilter)}
               />
-              {/* this button should be disabled if there are no completed todos */}
               <button
+                onClick={() => removeAllComplited()}
                 type="button"
                 className="todoapp__clear-completed"
-                disabled={checkForDoneTask()}
+                disabled={!hasComplitedTodos()}
                 data-cy="ClearCompletedButton"
               >
                 Clear completed

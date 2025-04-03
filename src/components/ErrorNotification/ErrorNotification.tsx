@@ -1,6 +1,6 @@
 import classNames from 'classnames';
-import { ErrorMessages } from '../../types/errorMessage';
 import { useEffect } from 'react';
+import { ErrorMessages } from '../../types/ErrorMessages';
 
 interface Props {
   errorMessage: ErrorMessages | null;
@@ -20,7 +20,7 @@ export const ErrorNotification: React.FC<Props> = ({
 
     const timer = setTimeout(() => {
       removeError();
-    }, 3000);
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, [errorMessage, removeError]);
